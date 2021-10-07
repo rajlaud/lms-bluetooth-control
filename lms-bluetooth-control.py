@@ -8,13 +8,13 @@ import asyncio
 import logging
 
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 logging.getLogger("pysqueezebox").setLevel(logging.WARN)
 logger.debug("Starting lms-bluetooth-control.")
 
 SERVER = "127.0.0.1"
+DEFAULT_PLAYER = "Aft Cabin"
 
 SERVICE_NAME = "org.bluez"
 PLAYER_IFACE = SERVICE_NAME + ".MediaPlayer1"
@@ -129,6 +129,7 @@ class BluetoothPlayer:
 
     async def lms_play(self):
         """Start LMS player and pause watch."""
+        await self.lms_player.async_load_url("wavin:bluealsa")
         await self.lms_player.async_play()
         await self.pause_watch()
 
@@ -155,19 +156,41 @@ class BluetoothPlayer:
             logger.debug("Not pausing bluetooth player because LMS is playing.")
 
 
+async def find_active_player(lms):
+    """Find an active LMS player, if there is one. Otherwise use default player."""
+    assert lms is not None
+    players = await lms.async_get_players()
+    if not players:
+        logger.warn("No Squeezebox players found on server {}.".format(lms))
+        return None
+    for player in players:
+        await player.async_update()
+        if player.power:
+            logger.info("Found active Squeezebox player {}.".format(player.name))
+            return player
+    logger.info("Using default Squeezebox player {}".format(DEFAULT_PLAYER))
+    return await lms.async_get_player(DEFAULT_PLAYER)
+
+
 async def main():
     """Monitor DBus for bluetooth players."""
     bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
 
     async with aiohttp.ClientSession() as session:
         lms = Server(session, SERVER)
-        player = await lms.async_get_player("Aft Cabin")
+        player = await find_active_player(lms)
+        assert player is not None
 
         bluetoothPlayer = BluetoothPlayer(bus, player)
         await bluetoothPlayer.find_player()
 
         while True:
-            await asyncio.sleep(1)
+            await asyncio.sleep(60)
+            # check that we still have a player to control
+            if not player.power:
+                # search for an active player
+                logger.info("Player {} powered off.".format(player.name))
+                player = await find_active_player(lms)
 
 
 asyncio.run(main())
