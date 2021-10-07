@@ -1,0 +1,36 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+ <interface name="org.freedesktop.DBus.Introspectable">
+  <method name="Introspect"><arg name="xml" type="s" direction="out"/></method>
+ </interface>
+ <interface name="org.bluez.MediaPlayer1">
+   <method name="Play"></method>
+   <method name="Pause"></method>
+   <method name="Stop"></method>
+   <method name="Next"></method>
+   <method name="Previous"></method>
+   <method name="FastForward"></method>
+   <method name="Rewind"></method>
+   <property name="Name" type="s" access="read"></property>
+   <property name="Type" type="s" access="read"></property>
+   <property name="Subtype" type="s" access="read"></property>
+   <property name="Position" type="u" access="read"></property>
+   <property name="Status" type="s" access="read"></property>
+   <property name="Equalizer" type="s" access="readwrite"></property>
+   <property name="Repeat" type="s" access="readwrite"></property>
+   <property name="Shuffle" type="s" access="readwrite"></property>
+   <property name="Scan" type="s" access="readwrite"></property>
+   <property name="Track" type="a{sv}" access="read"></property>
+   <property name="Device" type="o" access="read"></property>
+   <property name="Browsable" type="b" access="read"></property>
+   <property name="Searchable" type="b" access="read"></property>
+   <property name="Playlist" type="o" access="read"></property>
+  </interface>
+  <interface name="org.freedesktop.DBus.Properties">
+    <method name="Get"><arg name="interface" type="s" direction="in"/><arg name="name" type="s" direction="in"/><arg name="value" type="v" direction="out"/></method>
+    <method name="Set"><arg name="interface" type="s" direction="in"/><arg name="name" type="s" direction="in"/><arg name="value" type="v" direction="in"/></method>
+    <method name="GetAll"><arg name="interface" type="s" direction="in"/><arg name="properties" type="a{sv}" direction="out"/></method>
+    <signal name="PropertiesChanged"><arg name="interface" type="s"/><arg name="changed_properties" type="a{sv}"/><arg name="invalidated_properties" type="as"/></signal>
+</interface>
+</node>
