@@ -1,6 +1,5 @@
 """Python agent to interface between a bluetooth audio source and LMS."""
 
-from re import S
 from dbus_next import Message, MessageType, BusType
 from dbus_next.aio import MessageBus
 from pysqueezebox import Server
@@ -8,6 +7,12 @@ import aiohttp
 import asyncio
 import logging
 
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logging.getLogger("pysqueezebox").setLevel(logging.WARN)
+logger.debug("Starting lms-bluetooth-control.")
 
 SERVER = "127.0.0.1"
 
@@ -39,6 +44,7 @@ class BluetoothPlayer:
         self.lms_player = player
         self.mediaplayer1_interface = None
         self.connected = False
+        self.lms_pause_watch = None
 
         dbus_object = bus.get_proxy_object(
             SERVICE_NAME, "/", OBJECT_MANAGER_INTROSPECTION
@@ -58,7 +64,7 @@ class BluetoothPlayer:
                 player_path = path
 
         if player_path:
-            logging.debug("Found player on path [{}]".format(player_path))
+            logger.debug("Found player on path [{}]".format(player_path))
             self.connected = True
             bluetooth_player_object = self.bus.get_proxy_object(
                 SERVICE_NAME, player_path, MEDIA_PLAYER1_INTROSPECTION
@@ -71,57 +77,86 @@ class BluetoothPlayer:
                 "org.freedesktop.DBus.Properties"
             )
             properties_interface.on_properties_changed(self.properties_changed)
+
+            if await self.mediaplayer1_interface.get_status() == "playing":
+                return await self.lms_play()
+
+            await self.lms_player.async_update()
+            if self.lms_player.url and "wavin:bluealsa" in self.lms_player.url:
+                # source already set to bluetooth, so let's watch it's status
+                if self.lms_player.mode == "play":
+                    await self.pause_watch()
         else:
-            logging.debug("Could not find player.")
+            logger.debug("Could not find player.")
+
+    async def pause_watch(self):
+        """Wait for the LMS player to pause or stop."""
+        if self.lms_pause_watch is None or self.lms_pause_watch.done():
+            logger.debug("Setting LMS pause watch.")
+            self.lms_pause_watch = self.lms_player.create_property_future(
+                "mode", lambda x: x != "play"
+            )
+            await self.lms_pause_watch
+            logger.debug("LMS player paused.")
+            await self.pause_if_playing()
+        else:
+            logger.debug(
+                "Pause watch already set, player is {}".format(self.lms_player.mode)
+            )
 
     def interfaces_added(self, object_added, interfaces_and_paths):
         """Monitor for new media player devices."""
-        logging.debug("Interfaces added: {}".format(interfaces_and_paths))
+        logger.debug("Interfaces added: {}".format(interfaces_and_paths))
         if "org.bluez.MediaPlayer1" in interfaces_and_paths:
             # this is lazy but should work
             asyncio.create_task(self.find_player())
         else:
-            logging.debug("Not a media player.")
+            logger.debug("Not a media player.")
 
     def properties_changed(self, interface, changed, invalidated):
+        """Schedule the property change coroutine."""
+        asyncio.create_task(self.async_properties_changed(changed))
+
+    async def async_properties_changed(self, changed):
         """Handle relevant property change signals."""
         if "Status" in changed:
             status = changed["Status"].value
-            logging.debug("Player changed to status {}".format(status))
+            logger.debug("Bluetooth player changed to status {}".format(status))
             if status == "paused":
-                asyncio.create_task(self.lms_player.async_pause())
-                resume_future = self.lms_player.create_property_future(
-                    "mode", lambda x: x == "play"
-                )
-                resume_future.add_done_callback(self.play)
+                await self.lms_pause()
             elif status == "playing":
-                asyncio.create_task(self.lms_player.async_load_url("wavin:bluealsa"))
-                pause_future = self.lms_player.create_property_future(
-                    "mode", lambda x: x == "pause"
+                await self.lms_play()
+
+    async def lms_play(self):
+        """Start LMS player and pause watch."""
+        await self.lms_player.async_play()
+        await self.pause_watch()
+
+    async def lms_pause(self):
+        if self.lms_pause_watch and not self.lms_pause_watch.done():
+            logger.debug("Canceling pause watch.")
+            self.lms_pause_watch.cancel()
+        else:
+            logger.debug("No pause watch set.")
+        await self.lms_player.async_pause()
+
+    async def pause_if_playing(self):
+        """Confirm LMS paused and send the bluetooth pause command if bluetooth playing."""
+        await self.lms_player.async_update()
+        if self.lms_player.mode != "play":
+            if await self.mediaplayer1_interface.get_status() == "playing":
+                logger.debug("Sending pause command to bluetooth player.")
+                await self.mediaplayer1_interface.call_pause()
+            else:
+                logger.debug(
+                    "Not sending pause command because bluetooth player is paused."
                 )
-                pause_future.add_done_callback(self.pause)
-
-    def play(self, future):
-        """Send the play signal to the bluetooth player."""
-        if self.connected:
-            asyncio.create_task(self.mediaplayer1_interface.call_play())
-            logging.debug("Sending play command to bluetooth player.")
         else:
-            logging.warn("Error: tried to play with no connected player.")
-
-    def pause(self, future):
-        """Send the pause signal to the bluetooth player."""
-        if self.connected:
-            asyncio.create_task(self.mediaplayer1_interface.call_pause())
-            logging.debug("Sending pause command to bluetooth player.")
-        else:
-            logging.warn("Error: tried to pause with no connected player.")
+            logger.debug("Not pausing bluetooth player because LMS is playing.")
 
 
 async def main():
     """Monitor DBus for bluetooth players."""
-    logging.basicConfig(level=logging.DEBUG)
-
     bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
 
     async with aiohttp.ClientSession() as session:
@@ -131,7 +166,8 @@ async def main():
         bluetoothPlayer = BluetoothPlayer(bus, player)
         await bluetoothPlayer.find_player()
 
-        await asyncio.get_event_loop().create_future()
+        while True:
+            await asyncio.sleep(1)
 
 
 asyncio.run(main())
