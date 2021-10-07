@@ -90,8 +90,32 @@ class BluetoothPlayer:
             logging.debug("Player changed to status {}".format(status))
             if status == "paused":
                 asyncio.create_task(self.lms_player.async_pause())
+                resume_future = self.lms_player.create_property_future(
+                    "mode", lambda x: x == "play"
+                )
+                resume_future.add_done_callback(self.play)
             elif status == "playing":
                 asyncio.create_task(self.lms_player.async_load_url("wavin:bluealsa"))
+                pause_future = self.lms_player.create_property_future(
+                    "mode", lambda x: x == "pause"
+                )
+                pause_future.add_done_callback(self.pause)
+
+    def play(self, future):
+        """Send the play signal to the bluetooth player."""
+        if self.connected:
+            asyncio.create_task(self.mediaplayer1_interface.call_play())
+            logging.debug("Sending play command to bluetooth player.")
+        else:
+            logging.warn("Error: tried to play with no connected player.")
+
+    def pause(self, future):
+        """Send the pause signal to the bluetooth player."""
+        if self.connected:
+            asyncio.create_task(self.mediaplayer1_interface.call_pause())
+            logging.debug("Sending pause command to bluetooth player.")
+        else:
+            logging.warn("Error: tried to pause with no connected player.")
 
 
 async def main():
