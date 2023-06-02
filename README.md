@@ -1,4 +1,5 @@
 # lms-bluetooth-control
+
 Automatically start and pause Bluetooth audio stream in LMS Server
 
 This is designed to run on a Raspberry Pi set up as a bluetooth audio sink and an LMS server.
@@ -9,5 +10,3 @@ can be captured on the `bluealsa` ALSA device. Finally, it assumes that you have
 
 Make sure that the user running this script has access to the bluetooth DBus. The easiest way is to add
 the user to the `bluetooth` group.
-
-More configuration coming in later versions.
