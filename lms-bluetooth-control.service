@@ -2,7 +2,7 @@
 Description=Control LMS server based on connected blue audio source
 After=logitechmediaserver.service
 [Service]
-ExecStart=/usr/bin/python3 /home/pi/lms-bluetooth-control/lms-bluetooth-control/lms-bluetooth-control.py
+ExecStart=/usr/bin/python3 /home/pi/lms-bluetooth-control/lms-bluetooth-control/lms_bluetooth_control.py
 Restart=always
 WorkingDirectory=/home/pi/lms-bluetooth-control/lms-bluetooth-control
 User=pi
