@@ -5,6 +5,8 @@ After=network.target logitechmediaserver.service bluetooth.service
 [Service]
 ExecStart=/usr/bin/python3 /home/pi/lms-bluetooth-control/lms-bluetooth-control/lms_bluetooth_control.py
 Restart=always
+RestartSec=3
+Type=simple
 WorkingDirectory=/home/pi/lms-bluetooth-control/lms-bluetooth-control
 User=pi
 
