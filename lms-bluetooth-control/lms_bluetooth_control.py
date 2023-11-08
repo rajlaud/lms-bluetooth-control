@@ -10,7 +10,7 @@ from dbus_fast.errors import DBusError
 from pysqueezebox import Server
 from json import dump
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARN)
 logger = logging.getLogger(__name__)
 logging.getLogger("pysqueezebox").setLevel(logging.WARN)
 logger.debug("Starting lms-bluetooth-control")
