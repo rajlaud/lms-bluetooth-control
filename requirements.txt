@@ -1,0 +1,2 @@
+attr==0.3.2
+pysqueezebox==0.7.1
